@@ -7,6 +7,7 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 
 API_URL = "https://europa.eu/eures/eures-apps/searchengine/page/jv-search/search"
+DETAIL_URL = "https://europa.eu/eures/eures-apps/searchengine/page/jv/id/{id}?lang=en"
 RESULTS_PER_PAGE = 50
 KEYWORDS = ["relocation", "visa", "sponsorship"]
 
@@ -32,6 +33,7 @@ def create_session() -> requests.Session:
         {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0",
             "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.5",
             "Content-Type": "application/json",
             "X-XSRF-TOKEN": token,
         }
@@ -64,6 +66,24 @@ def fetch_page(session: requests.Session, page: int) -> Dict:
     response = session.post(API_URL, json=body)
     response.raise_for_status()
     return response.json()
+
+
+def fetch_job_details(session: requests.Session, job_id: str) -> Dict:
+    """Fetch details for a single job posting."""
+    url = DETAIL_URL.format(id=job_id)
+    response = session.get(url)
+    response.raise_for_status()
+    return response.json()
+
+
+def requires_only_english(details: Dict) -> bool:
+    """Return True if the job requires only English."""
+    profiles = details.get("jvProfiles", {})
+    if not profiles:
+        return False
+    profile = profiles.get("en") or next(iter(profiles.values()))
+    languages = profile.get("positionLanguages", [])
+    return len(languages) == 1 and languages[0].get("languageCode") == "en"
 
 
 def contains_keywords(description: str) -> bool:
@@ -126,7 +146,14 @@ def main(max_pages: int | None) -> None:
             job_id = job.get("id")
             print(f"Processing job id {job_id}")
             if contains_keywords(job.get("description", "")):
-                filtered.append(job)
+                try:
+                    details = fetch_job_details(session, job_id)
+                    print(f"GET succeeded for job {job_id}")
+                except requests.RequestException as exc:
+                    print(f"GET failed for job {job_id}: {exc}")
+                    continue
+                if requires_only_english(details):
+                    filtered.append(job)
         write_csv(filtered, filename, write_header)
         write_header = False
         page += 1
