@@ -8,7 +8,7 @@ from requests.adapters import HTTPAdapter, Retry
 
 API_URL = "https://europa.eu/eures/eures-apps/searchengine/page/jv-search/search"
 RESULTS_PER_PAGE = 50
-KEYWORDS = ["relocation assistance", "visa sponsorship"]
+KEYWORDS = ["relocation", "visa", "sponsorship"]
 
 
 def create_session() -> requests.Session:
@@ -110,12 +110,23 @@ def main(max_pages: int | None) -> None:
     while True:
         if max_pages and page > max_pages:
             break
-        data = fetch_page(session, page)
+        print(f"Fetching page {page}")
+        try:
+            data = fetch_page(session, page)
+            print(f"POST succeeded for page {page}")
+        except requests.RequestException as exc:
+            print(f"POST failed for page {page}: {exc}")
+            break
         if total_pages is None:
             total_records = data.get("numberRecords", 0)
             total_pages = math.ceil(total_records / RESULTS_PER_PAGE)
         jobs = data.get("jvs", [])
-        filtered = [job for job in jobs if contains_keywords(job.get("description", ""))]
+        filtered = []
+        for job in jobs:
+            job_id = job.get("id")
+            print(f"Processing job id {job_id}")
+            if contains_keywords(job.get("description", "")):
+                filtered.append(job)
         write_csv(filtered, filename, write_header)
         write_header = False
         page += 1

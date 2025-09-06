@@ -13,3 +13,5 @@ python job_filter.py
 ```
 
 The script writes `filtered_jobs.csv` in the current directory, appending matches after each page fetch. Pass `--max-pages N` to limit the number of pages fetched during a run.
+
+During execution, progress messages indicate which page and job IDs are being processed and whether each POST request succeeds.
